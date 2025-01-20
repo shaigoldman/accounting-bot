@@ -5,6 +5,7 @@ from InquirerPy import inquirer
 from pathlib import Path
 from consts import CATS, BASE_PATH, COLS, OUT_PATH, CAT_SAVE_PATH, AMZ_ORDERS_PATH
 import json
+import sys
 
 
 def inquire(msg: str, choices: list[str]):
@@ -94,10 +95,10 @@ def add_amz_infos(data: pd.DataFrame):
 
     # Filter based on exact Price match and date within 5 days
     merged = merged[
-        (merged["Total Owed"] == merged["Debit"])
+        (merged["Total Owed"] == (merged["Debit"] - merged["Credit"]))
         & (np.abs((merged["Date_x"] - merged["Date_y"]).dt.days) <= 5)
     ]
-    merged
+    merged = merged.groupby("index").first()  # make sure no double matches
 
     # remerge onto og index
     data = data.merge(merged[["index", "Product Name"]], on="index", how="left")
@@ -122,6 +123,8 @@ def get_data(dataname: Path, cat_store: dict[str, str]):
         data = format_chase(data)
     elif "amz" in dataname.stem.lower():
         data = format_amz(data)
+    else:
+        raise ValueError(f"Unrecognized dataname: {dataname}")
 
     data.Date = pd.to_datetime(data.Date)
 
@@ -143,7 +146,7 @@ def get_data(dataname: Path, cat_store: dict[str, str]):
 
 
 def main():
-    month = "dec"
+    month = sys.argv[1]
     path = BASE_PATH / month
 
     cat_store = {}

@@ -20,6 +20,7 @@ CATS = [
     "recreation/entertainment",
     "rent",
     "restaurant",
+    "school",
     "transport",
     "transportation",
     "unknown",
