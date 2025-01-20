@@ -26,7 +26,7 @@ CATS = [
     "utilities",
 ]
 
-COLS = ["Date", "Description", "Debit", "Credit", "Category"]
+COLS = ["Date", "Description", "Debit", "Credit", "Category", "Og Descript"]
 
 BASE_PATH = Path("/Users/anaavda/Desktop/SubDesktop/CodeProjects/accountant/data")
 

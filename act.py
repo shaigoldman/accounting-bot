@@ -125,6 +125,7 @@ def get_data(dataname: Path, cat_store: dict[str, str]):
 
     data.Date = pd.to_datetime(data.Date)
 
+    data["Og Descript"] = data.Description
     data.Description = data.Description.apply(lambda x: re.sub(r"([*\.])", " ", x))
     data.Description = data.Description.apply(lambda x: re.sub(r"[^A-Za-z ]+", "", x))
     data.Description = data.Description.apply(lambda x: re.sub(r"(XX+)", "", x))
@@ -158,6 +159,7 @@ def main():
         all_data.append(get_data(dataname, cat_store))
 
     all_data = pd.concat(all_data)
+    all_data = all_data.sort_values(by="Category")
 
     all_data.to_csv(OUT_PATH.format(month=month))
 
