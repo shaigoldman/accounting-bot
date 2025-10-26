@@ -3,7 +3,15 @@ import re
 import numpy as np
 from InquirerPy import inquirer
 from pathlib import Path
-from consts import CATS, BASE_PATH, COLS, OUT_PATH, CAT_SAVE_PATH, AMZ_ORDERS_PATH
+from consts import (
+    CATS,
+    BASE_PATH,
+    COLS,
+    OUT_PATH,
+    CAT_SAVE_PATH,
+    AMZ_ORDERS_PATH,
+    DESCRIPT_LLEN,
+)
 import json
 import sys
 
@@ -63,6 +71,7 @@ def load_amz_orders():
 
     amz_data = pd.read_csv(AMZ_ORDERS_PATH, thousands=",")[
         [
+            "Ship Date",
             "Order Date",
             "Order ID",
             "Total Owed",
@@ -70,12 +79,20 @@ def load_amz_orders():
         ]
     ]
     amz_data["Total Owed"] = amz_data["Total Owed"].astype(float)
+    amz_data.loc[amz_data["Ship Date"] == "Not Available", "Ship Date"] = amz_data.loc[
+        amz_data["Ship Date"] == "Not Available", "Order Date"
+    ]
+    amz_data["Date"] = pd.to_datetime(
+        amz_data["Ship Date"].apply(lambda x: x.split("T")[0])
+    )
     amz_data_g = amz_data.groupby("Order ID").agg(
-        {"Total Owed": "sum", "Product Name": "sum", "Order Date": "last"}
+        {
+            "Total Owed": "sum",
+            "Product Name": "sum",
+            "Date": "max",
+        }
     )
-    amz_data_g["Date"] = pd.to_datetime(
-        amz_data_g["Order Date"].apply(lambda x: x.split("T")[0])
-    )
+
     return amz_data_g
 
 
@@ -95,10 +112,11 @@ def add_amz_infos(data: pd.DataFrame):
 
     # Filter based on exact Price match and date within 5 days
     merged = merged[
-        (merged["Total Owed"] == (merged["Debit"] - merged["Credit"]))
+        (np.abs(merged["Total Owed"] - (merged["Debit"] - merged["Credit"])) < 0.01)
         & (np.abs((merged["Date_x"] - merged["Date_y"]).dt.days) <= 5)
     ]
     merged = merged.groupby("index").first()  # make sure no double matches
+    merged = merged.reset_index()
 
     # remerge onto og index
     data = data.merge(merged[["index", "Product Name"]], on="index", how="left")
@@ -134,7 +152,9 @@ def get_data(dataname: Path, cat_store: dict[str, str]):
     data.Description = data.Description.apply(lambda x: re.sub(r"(XX+)", "", x))
     data.Description = data.Description.apply(lambda x: x.title())
     data.Description = data.Description.apply(lambda x: re.sub(r"(Ny|Nj|Ca)", "", x))
-    data.Description = data.Description.apply(lambda x: " ".join(x.split(" ")[:6]))
+    data.Description = data.Description.apply(
+        lambda x: " ".join([s for s in x.split(" ") if len(s) > 1][:DESCRIPT_LLEN])
+    )
 
     if "amz" in dataname.stem.lower():
         data = add_amz_infos(data)
@@ -146,28 +166,34 @@ def get_data(dataname: Path, cat_store: dict[str, str]):
 
 
 def main():
-    month = sys.argv[1]
-    path = BASE_PATH / month
+    file_name = sys.argv[1]
+    path = BASE_PATH / file_name
 
     cat_store = {}
     if CAT_SAVE_PATH.exists():
         with CAT_SAVE_PATH.open("r") as f:
             cat_store = json.load(f)
 
-    all_data = []
-    for dataname in path.iterdir():
-        if not ".csv" in dataname.suffix.lower():
-            continue
-        print(dataname)
-        all_data.append(get_data(dataname, cat_store))
+    try:
+        all_data = []
+        for dataname in path.iterdir():
+            if not ".csv" in dataname.suffix.lower() or dataname.stem[0] == "_":
+                continue
+            print(dataname)
+            all_data.append(get_data(dataname, cat_store))
 
-    all_data = pd.concat(all_data)
-    all_data = all_data.sort_values(by="Category")
+        all_data = pd.concat(all_data)
 
-    all_data.to_csv(OUT_PATH.format(month=month))
-
-    with CAT_SAVE_PATH.open("w") as f:
-        json.dump(cat_store, f)
+        all_data["YearMonth"] = all_data["Date"].dt.to_period("M")
+        for month, group in all_data.groupby("YearMonth"):
+            fname = OUT_PATH.format(month=month)
+            group.drop(columns="YearMonth").sort_values(by="Category").to_csv(
+                fname, index=False
+            )
+            print(f"Saved {fname} with {len(group)} rows.")
+    finally:
+        with CAT_SAVE_PATH.open("w") as f:
+            json.dump(cat_store, f)
 
 
 main()
