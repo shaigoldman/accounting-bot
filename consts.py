@@ -3,7 +3,6 @@ from pathlib import Path
 CATS = [
     "delete",
     "unknown",
-    "amazon",
     "baby",
     "books",
     "car",
