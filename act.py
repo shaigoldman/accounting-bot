@@ -58,6 +58,16 @@ def format_citi_or_cap(data: pd.DataFrame):
     return data
 
 
+def format_boa(data: pd.DataFrame):
+    data["Date"] = data["Posted Date"]
+    data["Credit"] = data["Amount"].abs()
+    data["Debit"] = data["Amount"].abs()
+    data.loc[data.Amount > 0, "Debit"] = 0
+    data.loc[data.Amount < 0, "Credit"] = 0
+    data["Description"] = data["Payee"]
+    return data
+
+
 def format_amz(data: pd.DataFrame):
     data["Date"] = data["Transaction Date"]
     data["Credit"] = data["Amount"].abs()
@@ -141,6 +151,8 @@ def get_data(dataname: Path, cat_store: dict[str, str]):
         data = format_chase(data)
     elif "amz" in dataname.stem.lower():
         data = format_amz(data)
+    elif "boa" in dataname.stem.lower():
+        data = format_boa(data)
     else:
         raise ValueError(f"Unrecognized dataname: {dataname}")
 
